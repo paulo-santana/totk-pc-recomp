@@ -1796,7 +1796,10 @@ static void support_in(const VkExec *ex, float in[3]) {   // what support_fill r
 // TOTK_PCSS_K overrides the depth-to-penumbra factor at 100 percent, for tuning.
 static const float *pcss_params(void) {
     static float p[4] = {-1, 0, 0, 0};
-    if (p[0] < 0) {
+    static unsigned seen = ~0u;   // TEMP (live tuning): parse again when the menu changed a setting
+    unsigned ver = cfg_version();
+    if (p[0] < 0 || ver != seen) {
+        seen = ver;
         int pct = cfg_int("TOTK_PCSS");
         pct = pct < 0 ? 0 : pct > 200 ? 200 : pct;
         const char *k = cfg_get("TOTK_PCSS_K");

@@ -31,7 +31,7 @@
 
 [performance]
 # The keys of this section and of [diagnostics] are for testing and troubleshooting, and take effect at the next start.
-# The Advanced tab of the settings menu (F1) shows all of them except zstd_native and zstd_check.
+# The Advanced tab of the settings menu (F1) shows all of them except zstd_native, zstd_check and the crash guards.
 
 # Scheduling.
 # A thread waiting for a virtual core interrupts the owner when it runs game code: 1 = on, 2 = priority inheritance
@@ -102,6 +102,14 @@
 # the differences (1 = on; slow).
 # zstd_native = 1
 # zstd_check = 0
+
+# Crash guards: game code that crashes on stale data skips it instead (0 = the game's own code).
+# An optional reference holding an invalid value is treated as absent.
+# optref_guard = 1
+# A Recall or Ultrahand target the game would crash on is skipped for that frame.
+# ability_guard = 1
+# A model scene report row with an out-of-range index is skipped for that frame (1.4.3 only).
+# report_guard = 1
 
 # Render fixes.
 # Wait for the game to finish rewriting level-of-detail data before the GPU reads it: stops objects flashing in the
@@ -200,7 +208,7 @@
 # does. Read when a movie starts, so a change takes effect at the next movie.
 # movie_aspect = keep
 # Field of view, in percent of the game's own: 70 to 140, 100 (the default) leaves the camera as it is. Higher shows
-# more of the world around Link. Game version 1.4.3 only. Changes while the game runs take effect at once.
+# more of the world around Link. Game versions 1.1.0 and 1.4.3. Changes while the game runs take effect at once.
 # fov = 100
 # Anisotropic filtering of surface textures: game (the level the game asks for, as on the Switch) or 2, 4, 8, 16. Keeps
 # ground, roads and walls seen at a shallow angle sharp into the distance. Only filtered, mipmapped textures that tile
@@ -436,6 +444,22 @@
 # Folder with the Switch shared fonts (BFTTF files, tools/extract_fonts.py output), for Chinese and Korean text.
 # Default: shared-fonts next to totk.exe. TOTK_SHARED_FONTS overrides it.
 # shared_fonts =
+
+# Gameplay Tweaks: independent live switches.
+[gameplay tweaks]
+# gameplay_tweaks_enabled = 0
+# gameplay_ultrahand_rotate = 1
+# gameplay_ultrahand_c_axis = 1
+# gameplay_ultrahand_distance = 1
+# gameplay_weapon_wheel = 1
+# gameplay_weapon_sensitivity = 1
+# gameplay_item_wheel = 1
+# gameplay_item_ad = 1
+# gameplay_map_zoom = 1
+# gameplay_map_zoom_sensitivity = 1
+# gameplay_rotation_sensitivity = 1
+# gameplay_distance_sensitivity = 1
+# gameplay_item_sensitivity = 1
 
 [cheats]
 # One line per cheat of the mods' cheat files, mods\<mod>\cheats\<build id>.txt (docs/cheats.md); the Cheats tab of

@@ -53,6 +53,7 @@ void rt_patches_init(void) {
         if (n >= sizeof list) n = sizeof list - 1;
     }
     rt_log("patches: %s (page %#llx)", list, RT_PATCH_PAGE);
+    grass_grid_init();
 #endif
 }
 

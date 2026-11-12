@@ -309,6 +309,7 @@ void res_wanted(unsigned out[2]);                          // the output size TO
 void res_fov_live(void);                                   // TOTK_FOV to the camera (set fov); on a settings change
 void res_dynres_live(void);                                // TOTK_DYNAMIC_RES to the game (set fixres); on a settings change
 // ---- code patches (patches.c) and the frame step (frame_rate.c)
+void grass_grid_init(void);                                // frame_rate.c: fills the grass grid size on the patch page
 void rt_patches_init(void);                                // after ldr_load: switches from the environment, the patch
                                                            // page committed; logs the sets
 int rt_patch_set(const char *name);                        // index of a set of generated patches.h, -1 if absent

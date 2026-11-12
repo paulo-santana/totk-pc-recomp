@@ -719,6 +719,9 @@ static void tab_screen(float scale) {
     row_shadow_scale();
     row_shadow_range();
     row_grass_range();
+    opt_slider("TOTK_GRASS_LOD", UI_MENU_GRASS_RANGE, 1.0f, 16.0f, UI_MENU_GRASS_RANGE_DESC, 0.5f, "LOD scale x%.1f");   // TEMP
+    opt_slider("TOTK_GRASS_FLOOR", UI_MENU_GRASS_RANGE, 0.0f, 200.0f, UI_MENU_GRASS_RANGE_DESC, 5.0f, "full density to %.0f m");   // TEMP
+    opt_slider("TOTK_GRASS_GRID", UI_MENU_GRASS_RANGE, 32.0f, 128.0f, UI_MENU_GRASS_RANGE_DESC, 16.0f, "grid %.0f cells (restart)");   // TEMP
     opt_slider("TOTK_PCSS", UI_MENU_PCSS, 0, 200, UI_MENU_PCSS_DESC, 10, "%.0f %%");
     opt_slider("TOTK_CONTACT_SHADOWS", UI_MENU_CONTACT_SHADOWS, 0, 100, UI_MENU_CONTACT_SHADOWS_DESC, 10, "%.0f %%");
     opt_toggle("TOTK_DLAA", UI_MENU_DLAA, UI_MENU_DLAA_DESC);

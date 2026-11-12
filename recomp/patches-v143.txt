@@ -13,6 +13,9 @@ set scene    TOTK_PATCH_SCENE    0
 set shadow   TOTK_PATCH_SHADOW   0
 set cascade  TOTK_PATCH_CASCADE  0
 set grass    TOTK_PATCH_GRASS    0
+set grasslod    TOTK_PATCH_GRASSLOD     0
+set grassfloor  TOTK_PATCH_GRASSFLOOR   0
+set grassgrid   TOTK_PATCH_GRASSGRID    0
 
 # 60 fps: the adaptive present-interval controller (main+0x2db174, 1.2.1 0x8f26c8) gets the minimum interval 1.
 site fps60 main 2db204 6b08015f 7100055f   # clamp: cmp w10, #1 (was cmp w10, w8 = minimum)
@@ -1116,6 +1119,128 @@ site grass  main a38e94 52802002 @page:x2 b9408842   # mov w2, #0x100     -> ldr
 site grass  main a38ef4 52801002 @page:x2 b9408c42   # mov w2, #0x80      -> ldr w2, [page+140]
 site grass  main 2063454 52a84f48 @page:x8 b9408108  # mov w8, #62.5      -> ldr w8, [page+128]
 site grass  main 2063460 52a83f48 @page:x8 b9409108  # mov w8, #31.25     -> ldr w8, [page+144]
+
+# TEMP: grass LOD scale from the patch page (+200, runtime/frame_rate.c grass_lod_live, TOTK_GRASS_LOD, live). Each
+# site keeps its load, saves x17 and d16 on the stack, loads the scale through x17 into s16, multiplies, restores.
+# str x17, [sp, #-16]!; str d16, [sp, #-16]!; adrp x17, page; ldr s16, [x17, #200]; fmul; ldr d16, [sp], #16; ldr x17, [sp], #16
+site grasslod  main e77a30 bd41a128 bd41a128 f81f0ff1 fc1f0ff0 @page:x17 bd40ca30 1e300908 fc4107f0 f84107f1   # s8 *= [page+200]
+site grasslod  main e77b94 bd41a141 bd41a141 f81f0ff1 fc1f0ff0 @page:x17 bd40ca30 1e300821 fc4107f0 f84107f1   # s1 *= [page+200]
+site grasslod  main e79d3c bd41a1a1 bd41a1a1 f81f0ff1 fc1f0ff0 @page:x17 bd40ca30 1e300821 fc4107f0 f84107f1   # s1 *= [page+200]
+site grasslod  main e73ff4 bd41a122 bd41a122 f81f0ff1 fc1f0ff0 @page:x17 bd40ca30 1e300842 fc4107f0 f84107f1   # s2 *= [page+200]
+site grasslod  main e741a8 bd41a161 bd41a161 f81f0ff1 fc1f0ff0 @page:x17 bd40ca30 1e300821 fc4107f0 f84107f1   # s1 *= [page+200]
+site grasslod  main e6a51c bd41a1c1 bd41a1c1 f81f0ff1 fc1f0ff0 @page:x17 bd40ca30 1e300821 fc4107f0 f84107f1   # s1 *= [page+200]
+site grasslod  main e6c768 bd41a1c1 bd41a1c1 f81f0ff1 fc1f0ff0 @page:x17 bd40ca30 1e300821 fc4107f0 f84107f1   # s1 *= [page+200]
+site grasslod  main e6c9b4 bd41a123 bd41a123 f81f0ff1 fc1f0ff0 @page:x17 bd40ca30 1e300863 fc4107f0 f84107f1   # s3 *= [page+200]
+site grasslod  main e713bc bd41a1c1 bd41a1c1 f81f0ff1 fc1f0ff0 @page:x17 bd40ca30 1e300821 fc4107f0 f84107f1   # s1 *= [page+200]
+site grasslod  main e6edac bd41a1c1 bd41a1c1 f81f0ff1 fc1f0ff0 @page:x17 bd40ca30 1e300821 fc4107f0 f84107f1   # s1 *= [page+200]
+site grasslod  main 5f6b90 bd41a1c1 bd41a1c1 f81f0ff1 fc1f0ff0 @page:x17 bd40ca30 1e300821 fc4107f0 f84107f1   # ModelTurfBlade: s1 *= [page+200]
+site grasslod  main e75d0c bd41a121 bd41a121 f81f0ff1 fc1f0ff0 @page:x17 bd40ca30 1e300821 fc4107f0 f84107f1   # s1 *= [page+200]
+site grasslod  main 1f07240 bd41a181 bd41a181 f81f0ff1 fc1f0ff0 @page:x17 bd40ca30 1e300821 fc4107f0 f84107f1   # s1 *= [page+200]
+site grasslod  main 1f07f48 bd41a181 bd41a181 f81f0ff1 fc1f0ff0 @page:x17 bd40ca30 1e300821 fc4107f0 f84107f1   # s1 *= [page+200]
+
+# Grass floor (TOTK_GRASS_FLOOR metres, live, page +204): each grass draw loads a cell's distance from the camera
+# (+8 of the cell entry) before its cut-off test and its density fall-off; v = max(v - floor, 0.125) makes the LOD act
+# as if every cell were floor metres closer, so cells within the floor keep their full tuft count and nothing pops there.
+site grassfloor main e77b68 bc408e60 bc408e60 f81f0ff1 fc1f0ff0 @page:x17 bd40ce30 1e303800 1e281010 1e304800 fc4107f0 f84107f1   # cross: s0 = max(s0 - [page+204], 0.125)
+site grassfloor main e79d18 bc408ea0 bc408ea0 f81f0ff1 fc1f0ff0 @page:x17 bd40ce30 1e303800 1e281010 1e304800 fc4107f0 f84107f1   # cross: s0 = max(s0 - [page+204], 0.125)
+site grassfloor main e7417c bd400980 bd400980 f81f0ff1 fc1f0ff0 @page:x17 bd40ce30 1e303800 1e281010 1e304800 fc4107f0 f84107f1   # blade: s0 = max(s0 - [page+204], 0.125)
+site grassfloor main e6a4f0 bd4009c0 bd4009c0 f81f0ff1 fc1f0ff0 @page:x17 bd40ce30 1e303800 1e281010 1e304800 fc4107f0 f84107f1   # stone: s0 = max(s0 - [page+204], 0.125)
+site grassfloor main e6c740 bd4009c0 bd4009c0 f81f0ff1 fc1f0ff0 @page:x17 bd40ce30 1e303800 1e281010 1e304800 fc4107f0 f84107f1   # flower long: s0 = max(s0 - [page+204], 0.125)
+site grassfloor main e71394 bd4009c0 bd4009c0 f81f0ff1 fc1f0ff0 @page:x17 bd40ce30 1e303800 1e281010 1e304800 fc4107f0 f84107f1   # petal: s0 = max(s0 - [page+204], 0.125)
+site grassfloor main e6ed84 bd4009c0 bd4009c0 f81f0ff1 fc1f0ff0 @page:x17 bd40ce30 1e303800 1e281010 1e304800 fc4107f0 f84107f1   # flower normal: s0 = max(s0 - [page+204], 0.125)
+site grassfloor main 5f6b6c bd4009c0 bd4009c0 f81f0ff1 fc1f0ff0 @page:x17 bd40ce30 1e303800 1e281010 1e304800 fc4107f0 f84107f1   # turf: s0 = max(s0 - [page+204], 0.125)
+site grassfloor main 1f07224 bd400980 bd400980 f81f0ff1 fc1f0ff0 @page:x17 bd40ce30 1e303800 1e281010 1e304800 fc4107f0 f84107f1   # leaves: s0 = max(s0 - [page+204], 0.125)
+site grassfloor main 1f07f2c bd400980 bd400980 f81f0ff1 fc1f0ff0 @page:x17 bd40ce30 1e303800 1e281010 1e304800 fc4107f0 f84107f1   # leaves: s0 = max(s0 - [page+204], 0.125)
+site grassfloor main e75cf4 bd400988 bd400988 f81f0ff1 fc1f0ff0 @page:x17 bd40ce30 1e303908 1e281010 1e304908 fc4107f0 f84107f1   # cover: s8 = max(s8 - [page+204], 0.125)
+
+# Grass grid size (TOTK_GRASS_GRID cells per side, restart; 32 is the game's own). The near grass families (turf
+# blades, blades, flowers, stones, cover) keep their cells in a square grid of N x N cells of about 2 m around the
+# camera, so nothing of theirs exists past about N metres. game::grass init (main+0xa388e0) builds three such grids and
+# sizes everything that holds one entry per cell for N = 32; each of those constants reads the page instead (filled by
+# frame_rate.c grass_grid_init): +256 the grid dimensions (N << 32 | N), +264 the grid of 20-byte cells (N*N*20),
+# +272 the 64-byte per-cell records (N*N*64), +280 the 112-byte per-cell records (N*N*112), +288 the list of visible
+# cells (N*N entries), +296 N (the per-cell texture's width and height, and the grid's +0x34). A cell index packs its
+# row and column into a byte each, and from 144 up the game draws no near grass at all
+# (an index read as a signed byte is the likely limit), so N stays at or below 128.
+site grassgrid main a3899c b21b03fc @page:x28 f940839c   # x28 = dims
+site grassgrid main a389a0 528a0015 @page:x21 b9410ab5   # w21 = grid bytes
+site grassgrid main a389ac 52800408 @page:x8 b9412908    # w8 = N
+site grassgrid main a389f8 f140151f f81f0ff1 @page:x17 f9408631 eb11011f f84107f1   # cmp x8, grid bytes
+site grassgrid main a38aa4 52808003 @page:x3 b9412063    # w3 = visible-cell list capacity
+site grassgrid main a38b20 52800402 @page:x2 b9412842    # w2 = per-cell texture size
+site grassgrid main a38bc4 528a0001 @page:x1 b9410821    # w1 = grid bytes (other allocation path)
+site grassgrid main a38c1c 52a00020 @page:x0 b9411000    # w0 = 64-byte records
+site grassgrid main a38c40 f140411f f81f0ff1 @page:x17 f9408a31 eb11011f f84107f1   # cmp x8, 64-byte records
+site grassgrid main a38c78 b21b03e8 @page:x8 f9408108    # x8 = dims
+site grassgrid main a38ca4 32120be0 @page:x0 b9411800    # w0 = 112-byte records
+site grassgrid main a38ccc f140711f f81f0ff1 @page:x17 f9408e31 eb11011f f84107f1   # cmp x8, 112-byte records
+site grassgrid main a38d1c b21b03e8 @page:x8 f9408108    # x8 = dims
+# Each grid layer also holds three per-frame queues of cells (blocks of a grid pointer, a count and 1024 four-byte
+# entries at layer +0x48, +0x1058 and +0x2068), filled by the grid update (main+0x35bc50) and read by it and by the
+# family draws. Queues 1 and 2 drop every cell past 1024, which a grid above about 64 cells per side fills, so grass
+# goes missing in patches; queue 0 has no cap and runs over into what follows (2262 entries seen at 128). All three
+# move to blocks of N*N entries that frame_rate.c allocates: page +400 + layer*32 + q*8 holds block q of the layer
+# whose index is at layer +0, and +24 the layer itself (stored by the per-frame reset). The grid pointers stay in
+# place at layer +0x48 and the resets copy them over.
+site grassgrid main 35dd2c b900517f f81f0ff1 f81f0ff0 b9400171 @page:x16 8b111610 f900d60b f940ca11 f9402570 f9000230 b9000a3f f84107f0 f84107f1 b900517f   # reset queue 0
+site grassgrid main 35dd30 b910617f f81f0ff1 f81f0ff0 b9400171 @page:x16 8b111610 f900d60b f940ce11 f9402570 f9000230 b9000a3f f84107f0 f84107f1   # reset queue 1
+site grassgrid main 35dd34 b920717f f81f0ff1 f81f0ff0 b9400171 @page:x16 8b111610 f900d60b f940d211 f9402570 f9000230 b9000a3f f84107f0 f84107f1   # reset queue 2
+site grassgrid main 35e7d8 f8448d09 f81f0ff1 b9400108 @page:x17 8b081631 f940ca28 f84107f1 f9400109   # queue 0 block, grid
+site grassgrid main 360440 b9405108 f81f0ff1 b9400108 @page:x17 8b081631 f940ca28 f84107f1 b9400908   # queue 0 sort count
+site grassgrid main 360454 91015149 f81f0ff1 b9400149 @page:x17 8b091631 f940ca29 f84107f1 91003129   # queue 0 entries
+site grassgrid main 360458 9101594a f81f0ff1 b940014a @page:x17 8b0a1631 f940ca2a f84107f1 9100394a   # queue 0 entries + 2
+site grassgrid main e73fa0 91012129 f81f0ff1 b9400129 @page:x17 8b091631 f940ca29 f84107f1   # blade draw: queue 0 of layer 0
+site grassgrid main e75d8c b9405148 f81f0ff1 b9400148 @page:x17 8b081631 f940ca28 f84107f1 b9400908   # draw: queue 0 count of layer 2
+site grassgrid main e75f2c f8448d28 f81f0ff1 b9400129 @page:x17 8b091631 f940ca29 f84107f1 f9400128   # draw: queue 0 block, grid of layer 2
+site grassgrid main e77a2c 91012108 f81f0ff1 b9400108 @page:x17 8b081631 f940ca28 f84107f1   # cross draw: queue 0
+site grassgrid main e79760 9101212a f81f0ff1 b940012a @page:x17 8b0a1631 f940ca2a f84107f1   # draw: queue 0 of layer 2
+site grassgrid main 35e060 7110011f f81f0ff1 @page:x17 b9412231 6b11011f f84107f1   # cap N*N
+site grassgrid main 35e6fc 7110011f f81f0ff1 @page:x17 b9412231 6b11011f f84107f1   # cap N*N
+site grassgrid main 35e05c b9a07108 f81f0ff1 b9400108 @page:x17 8b081631 f940d228 f84107f1 b9800908   # queue 2 count
+site grassgrid main 35e6f8 b9506108 f81f0ff1 b9400108 @page:x17 8b081631 f940ce28 f84107f1 b9400908   # queue 1 count
+site grassgrid main 35e770 8b0901c9 f81f0ff1 b94001c9 @page:x17 8b091631 f940ce29 f84107f1   # queue 1 block
+site grassgrid main 35e774 f9482dca f940012a   # queue 1 grid
+site grassgrid main 35e7ac b99061cc b980092c   # queue 1 count
+site grassgrid main 35e7bc b91061cd f81f0ff1 cb0c0931 b9000a2d f84107f1   # queue 1 count store (x9 = block + 4*count)
+site grassgrid main 35ed1c 8b0901c9 f81f0ff1 b94001c9 @page:x17 8b091631 f940d229 f84107f1   # queue 2 block
+site grassgrid main 35ed20 f95035ca f940012a   # queue 2 grid
+site grassgrid main 35ed54 b92071cd b900092d   # queue 2 count store
+site grassgrid main 36052c b95062a8 f81f0ff1 b94002a8 @page:x17 8b081631 f940ce28 f84107f1 b9400908   # queue 1 sort count
+site grassgrid main 360544 8b0902a9 f81f0ff1 b94002a9 @page:x17 8b091631 f940ce29 f84107f1 91003129   # queue 1 entries
+site grassgrid main 360548 8b0a02aa f81f0ff1 b94002aa @page:x17 8b0a1631 f940ce2a f84107f1 9100394a   # queue 1 entries + 2
+site grassgrid main 3606c0 b96072a8 f81f0ff1 b94002a8 @page:x17 8b081631 f940d228 f84107f1 b9400908   # queue 2 sort count
+site grassgrid main 360730 b96072b8 f81f0ff1 b94002b8 @page:x17 8b181631 f940d238 f84107f1 b9400b18   # queue 2 count
+site grassgrid main 360e14 8b090169 f81f0ff1 b9400169 @page:x17 8b091631 f940d229 f84107f1   # queue 2 block
+site grassgrid main 360e1c f9503568 f9400128   # queue 2 grid
+site grassgrid main 360f30 f9503529 f81f0ff1 b9400129 @page:x17 8b091631 f940d229 f84107f1 f9400129   # queue 2 grid
+site grassgrid main 361524 8b0902a9 f81f0ff1 b94002a9 @page:x17 8b091631 f940d229 f84107f1 91003129   # queue 2 entries
+site grassgrid main 363b3c 8b120102 f81f0ff0 b9400230 @page:x2 8b101442 f940d042 8b080042 cb110042 91003042 f84107f0   # queue 2 entry i
+site grassgrid main 361708 b960d0fc f81f0ff1 @page:x17 f940d23c b9400b9c f84107f1   # layer 0 queue 2 count
+site grassgrid main 363b34 f95064e9 @page:x9 f940d129 f9400129   # layer 0 queue 2 grid
+site grassgrid main 364a84 f95064e8 @page:x8 f940d108 f9400108   # layer 0 queue 2 grid
+site grassgrid main 364da4 f95064e8 @page:x8 f940d108 f9400108   # layer 0 queue 2 grid
+site grassgrid main 364ebc f95064e8 @page:x8 f940d108 f9400108   # layer 0 queue 2 grid
+site grassgrid main 365244 b94009cf @page:x15 f940f1ef b94009ef   # layer 2 queue 2 count
+site grassgrid main 365bbc f94001c8 @page:x8 f940f108 f9400108   # layer 2 queue 2 grid
+site grassgrid main 365ca8 f94001c8 @page:x8 f940f108 f9400108   # layer 2 queue 2 grid
+site grassgrid main 365bb8 8b100101 @page:x1 f940f021 8b080021 cb120021 91003021   # layer 2 queue 2 entry i
+site grassgrid main 365278 b950618d f81f0ff1 b940018d @page:x17 8b0d1631 f940ce2d f84107f1 b94009ad   # queue 1 count
+site grassgrid main 365280 f9482d90 f81f0ff1 b9400190 @page:x17 8b101631 f940ce30 f84107f1 f9400210   # queue 1 grid
+site grassgrid main 3652ac 8b837983 f81f0ff1 f81f0ff0 935efc63 b9400191 @page:x16 8b111610 f940ce11 8b110063 d1400463 d1016063 f84107f0 f84107f1   # queue 1 entry i - 0x1058 (read at +0x1064)
+site grassgrid main 73ce70 b95062a8 f81f0ff1 b94002a8 @page:x17 8b081631 f940ce28 f84107f1 b9400908   # queue 1 count
+site grassgrid main 73cec4 f9482ea9 f81f0ff1 b94002a9 @page:x17 8b091631 f940ce29 f84107f1 f9400129   # queue 1 grid
+site grassgrid main 73cecc 8b0802a8 f81f0ff1 b94002a8 @page:x17 8b081631 f940ce28 f84107f1   # queue 1 block
+site grassgrid main 891a48 b9506289 f81f0ff1 b9400289 @page:x17 8b091631 f940ce29 f84107f1 b9400929   # queue 1 count
+site grassgrid main 891a74 8b090289 f81f0ff1 b9400289 @page:x17 8b091631 f940ce29 f84107f1   # queue 1 block
+site grassgrid main 891a80 f9482e88 f81f0ff1 b9400288 @page:x17 8b081631 f940ce28 f84107f1 f9400108   # queue 1 grid
+site grassgrid main 5f66e4 8b090109 f81f0ff1 b9400109 @page:x17 8b091631 f940ce29 f84107f1   # draw: queue 1
+site grassgrid main e6a354 8b0a012a f81f0ff1 b940012a @page:x17 8b0a1631 f940ce2a f84107f1   # draw: queue 1
+site grassgrid main e6c408 8b0a012a f81f0ff1 b940012a @page:x17 8b0a1631 f940ce2a f84107f1   # draw: queue 1
+site grassgrid main e6ea58 8b0a012a f81f0ff1 b940012a @page:x17 8b0a1631 f940ce2a f84107f1   # draw: queue 1
+site grassgrid main e71068 8b0a012a f81f0ff1 b940012a @page:x17 8b0a1631 f940ce2a f84107f1   # draw: queue 1
+site grassgrid main 1f06244 8b0c017a f81f0ff1 b940017a @page:x17 8b1a1631 f940ce3a f84107f1   # draw: queue 1
+site grassgrid main 1f06ed8 8b0c0178 f81f0ff1 b9400178 @page:x17 8b181631 f940ce38 f84107f1   # draw: queue 1
+site grassgrid main 1f07ca8 8b0c0179 f81f0ff1 b9400179 @page:x17 8b191631 f940ce39 f84107f1   # draw: queue 1
 
 
 # Optional reference with an invalid value (#1005). main+0x1bd0138 reads an optional reference at object +0x6b0 (null or

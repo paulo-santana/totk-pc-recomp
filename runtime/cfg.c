@@ -32,7 +32,7 @@ static int save_ok = 1;                         // the last cfg_save_to wrote (o
 // logged as unknown. A new variable goes here too, or its ini key logs a harmless "unknown key" line, and gets a
 // description in totk.ini.example or docs/settings.md (tests/settings_doc_check.py checks both).
 static const char *const known[] = {
-    "AB", "AMIIBO_DIR", "ANISO", "APP_POOL", "ASPECT", "ASPECT_PATCH", "ASSUME_FOCUS", "ASTC", "ASTC_BC", "ASTC_TIME", "ASYNC_PREEMPT", "AUDIO", "AUDIO_CHANNELS", "AUDIO_OFF", "AUDIO_PREFILL_MS",
+    "AB", "ABILITY_GUARD", "AMIIBO_DIR", "ANISO", "APP_POOL", "ASPECT", "ASPECT_PATCH", "ASSUME_FOCUS", "ASTC", "ASTC_BC", "ASTC_TIME", "ASYNC_PREEMPT", "AUDIO", "AUDIO_CHANNELS", "AUDIO_OFF", "AUDIO_PREFILL_MS",
     "BACKGROUND_WINDOW", "BIND_A", "BIND_B", "BIND_DOWN", "BIND_L", "BIND_LCLICK", "BIND_LEFT", "BIND_LSTICK_DOWN", "BIND_LSTICK_LEFT",
     "BIND_LSTICK_RIGHT", "BIND_LSTICK_UP", "BIND_MINUS",
     "BIND_PLUS", "BIND_R", "BIND_RCLICK", "BIND_RIGHT", "BIND_RSTICK_DOWN", "BIND_RSTICK_LEFT", "BIND_RSTICK_RIGHT", "BIND_RSTICK_UP",
@@ -44,17 +44,24 @@ static const char *const known[] = {
     "DUMP_LOG", "DYNAMIC_RES", "DYN_DELTA", "EXEFS", "FEEDBACK", "FIXED_RES_PATCH", "FIX_C0", "FIX_ZERO", "FLIGHT", "FLIGHT_AT", "FLIGHT_DIR", "FLIGHT_FRAMES",
     "FLIGHT_SPIKE_MS", "FLIGHT_THUMBS", "FLUSH_SPAN", "FOV", "FOV_PATCH", "FPS60", "FPS_LIMIT", "FRAME_QUEUE",
     "FREEZE_IDLE", "FREE_CORES",
-    "FULLSCREEN", "FXAA", "GPL", "GPL_DRAW_BUILD", "GPU", "GPU_INDEX", "GPU_NAME", "GRASS_FLOOR", "GRASS_GRID", "GRASS_LOD", "GRASS_RANGE", "HDR", "HDR_GAME_NITS", "HDR_HUE",
+    "FULLSCREEN", "FXAA",
+    "GAMEPLAY_DISTANCE_SENSITIVITY", "GAMEPLAY_ITEM_AD", "GAMEPLAY_ITEM_SENSITIVITY", "GAMEPLAY_ITEM_WHEEL",
+    "GAMEPLAY_MAP_ZOOM", "GAMEPLAY_MAP_ZOOM_SENSITIVITY", "GAMEPLAY_ROTATION_SENSITIVITY", "GAMEPLAY_TWEAKS_ENABLED",
+    "GAMEPLAY_ULTRAHAND_C_AXIS", "GAMEPLAY_ULTRAHAND_DISTANCE", "GAMEPLAY_ULTRAHAND_ROTATE", "GAMEPLAY_WEAPON_SENSITIVITY",
+    "GAMEPLAY_WEAPON_WHEEL",
+    "GPL", "GPL_DRAW_BUILD", "GPU", "GPU_INDEX", "GPU_NAME",
+    "GRASS_FLOOR", "GRASS_GRID", "GRASS_LOD",
+    "GRASS_RANGE", "HDR", "HDR_GAME_NITS", "HDR_HUE",
     "HDR_PEAK_NITS", "HDR_UI_NITS", "HIGHFPS_FIX", "INPUT", "INPUT_RECORD", "INPUT_SCRIPT", "KSPIN_US", "LANG", "LIB_PREBUILD",
     "LIB_PREBUILD_KEEP", "LIB_PREBUILD_THREADS", "LOCALE", "LOD_GUARD", "LSTICK_DEADZONE", "MAP_CLICK", "MEMORY", "MENU_LANG", "MENU_TEST", "MENU_FONT_FONTCONFIG",
     "MEM_RESERVE_MIB", "MENU_CURSOR", "MENU_CURSOR_LOG", "MENU_TEST_DIR", "MENU_TEST_SET", "MINIMAL_LAYOUT", "MIRROR_GAP", "MODS_DIR", "MODS_DISABLED", "MODS_ORDER", "MODS_REBUILD", "MOTION", "MOUSE_AIM_SCALE", "MOUSE_MODE", "MOUSE_DIRECT_PATCH", "MOUSE_SENS", "MOVIE_ASPECT", "MOVIE_HOST", "MOVIE_PACE",
     "MVOBJ_ALL", "MVOBJ_BANKS", "MVOBJ_EQUAL", "MVOBJ_EXACT", "MVOBJ_EXEC", "MVOBJ_NOC4", "MVOBJ_ONLY", "MVOBJ_TIMES", "MVPREV_CHECK", "MVPREV_GROW", "MVPREV_SKIP", "MVPREV_TRUST", "MV_CHECK",
     "MV_SURVEY",
-    "ONE_PER_CORE", "OPERATION_MODE", "OUTPUT_RES", "PAD_LAYOUT", "PASS_CRUMBS", "PATCH_OUTPUT", "PATCH_SCENE", "PCORE", "PCSS", "PCSS_K", "PERF_OVERLAY", "PERF_SLOW_MS", "PIPELINE_CACHE", "PIPE_MEMO", "PIPE_PREBUILD", "PIPE_SKIP", "PIPE_SYNC", "PIPE_WAIT", "POINTER_IMAGE",
+    "ONE_PER_CORE", "OPERATION_MODE", "OPTREF_GUARD", "OUTPUT_RES", "PAD_LAYOUT", "PASS_CRUMBS", "PATCH_OUTPUT", "PATCH_SCENE", "PCORE", "PCSS", "PCSS_K", "PERF_OVERLAY", "PERF_SLOW_MS", "PIPELINE_CACHE", "PIPE_MEMO", "PIPE_PREBUILD", "PIPE_SKIP", "PIPE_SYNC", "PIPE_WAIT", "POINTER_IMAGE",
     "PREWARM_XLATE", "PROBE_MOVIE", "PROBE_MOVIE_BENCH", "PROBE_MOVIE_SHOT", "PROFILE", "PROFILE_CHAINS", "PROFILE_DIR", "PROFILE_FRAMES",
     "PROFILE_MAIN", "PROFILE_RENDER", "PROMPTS", "PUSH_SKIP", "PUSH_STAGE", "RDOC", "RDOC_DIR", "RDOC_DLL", "REALTIME", "REC_ASYNC", "REC_END", "REC_SPIN_US", "REEXEC", "REFLEX",
     "RENDER_SCALE", "REPLAY_ASYNC", "REPLAY_CHUNKS", "REPLAY_CHUNK_DRAWS", "REPLAY_SKEW_US", "REPLAY_STATE_CHECK", "REPLAY_WORKERS",
-    "REPLAY_CHECK", "RESOLVE_CHECK", "RESTART_WAIT", "ROMFS", "ROMFS_INDEX", "ROMFS_MMAP", "ROMFS_MODS", "ROMFS_PATCHES",
+    "REPLAY_CHECK", "REPORT_GUARD", "RESOLVE_CHECK", "RESTART_WAIT", "ROMFS", "ROMFS_INDEX", "ROMFS_MMAP", "ROMFS_MODS", "ROMFS_PATCHES",
     "ROMFS_PROOF_DIR", "ROMFS_VERIFY", "RSTICK_DEADZONE", "RUMBLE", "RUMBLE_CURVE", "RUMBLE_STRENGTH", "RUMBLE_TRIGGERS", "SHADER_CACHE",
     "SHADER_MEMO", "SHADOW_DEFER", "SHADOW_RANGE", "SHADOW_RES", "SHADOW_SCALE", "SHADOW_SNAP", "SHARED_FONTS", "SHARPNESS", "SHOTS", "SHOTS_DIR",
     "SHOTS_FULL", "SPEED_PROBE", "SPIN", "SPIN_HANDOFF_US", "SPLIT_DRAWS", "SPLIT_US", "STICK_DEADZONE", "STICK_SENS",
@@ -105,9 +112,17 @@ static const struct { const char *key, *section; } sections[] = {
     {"BIND_SKIP", "performance"}, {"SHADER_MEMO", "performance"}, {"PIPE_MEMO", "performance"}, {"TEX_MEMO", "performance"}, {"VB_USED", "performance"}, {"DESC_TEMPLATE", "performance"},
     {"SYNC_AHEAD", "performance"}, {"SHADOW_DEFER", "performance"}, {"PUSH_SKIP", "performance"}, {"SPLIT_DRAWS", "performance"}, {"SPLIT_US", "performance"}, {"VK_VALIDATION", "performance"},
     {"VK_DYN_VERTEX", "performance"}, {"VK_DYN_A2C", "performance"}, {"VK_SUBGROUP_PIN", "performance"},
+    {"OPTREF_GUARD", "performance"}, {"ABILITY_GUARD", "performance"}, {"REPORT_GUARD", "performance"},
     {"TRACE", "diagnostics"}, {"FLIGHT", "diagnostics"}, {"PASS_CRUMBS", "diagnostics"}, {"FLIGHT_SPIKE_MS", "diagnostics"},
     {"WB_FENCE_LIMIT", "diagnostics"}, {"WB_MERGE", "diagnostics"}, {"WB_EXACT", "diagnostics"},
     {"MV_SURVEY", "diagnostics"},
+    {"GAMEPLAY_TWEAKS_ENABLED", "gameplay tweaks"}, {"GAMEPLAY_ULTRAHAND_ROTATE", "gameplay tweaks"},
+    {"GAMEPLAY_ULTRAHAND_C_AXIS", "gameplay tweaks"}, {"GAMEPLAY_ULTRAHAND_DISTANCE", "gameplay tweaks"},
+    {"GAMEPLAY_ITEM_WHEEL", "gameplay tweaks"}, {"GAMEPLAY_ITEM_AD", "gameplay tweaks"},
+    {"GAMEPLAY_MAP_ZOOM", "gameplay tweaks"}, {"GAMEPLAY_MAP_ZOOM_SENSITIVITY", "gameplay tweaks"},
+    {"GAMEPLAY_ROTATION_SENSITIVITY", "gameplay tweaks"}, {"GAMEPLAY_DISTANCE_SENSITIVITY", "gameplay tweaks"},
+    {"GAMEPLAY_ITEM_SENSITIVITY", "gameplay tweaks"},
+    {"GAMEPLAY_WEAPON_WHEEL", "gameplay tweaks"}, {"GAMEPLAY_WEAPON_SENSITIVITY", "gameplay tweaks"},
 };
 
 // The settings the menu shows: the value in effect when the key is unset, and what the key accepts. The only place a
@@ -162,6 +177,14 @@ static const CfgMeta metas[] = {
     {"DIALOGUE_CLICK", "0", "0|1", LIVE},   // menu_cursor.c: in a dialogue box left click is B, right click A
     {"POINTER_IMAGE", "0", "0|1", LIVE},    // input_win.c / input_sdl.c: the game window's own pointer (cursor_art.c)
     {"WALK_KEY", "none", NULL, LIVE}, {"WALK_SCALE", "0.51", "0.2..0.9", LIVE},
+    // Gameplay Tweaks
+    {"GAMEPLAY_TWEAKS_ENABLED", "0", "0|1", LIVE},
+    {"GAMEPLAY_ULTRAHAND_ROTATE", "1", "0|1", LIVE}, {"GAMEPLAY_ULTRAHAND_C_AXIS", "1", "0|1", LIVE},
+    {"GAMEPLAY_ULTRAHAND_DISTANCE", "1", "0|1", LIVE}, {"GAMEPLAY_ITEM_WHEEL", "1", "0|1", LIVE},
+    {"GAMEPLAY_ITEM_AD", "1", "0|1", LIVE}, {"GAMEPLAY_MAP_ZOOM", "1", "0|1", LIVE},
+    {"GAMEPLAY_MAP_ZOOM_SENSITIVITY", "1", "0.25..4", LIVE}, {"GAMEPLAY_ROTATION_SENSITIVITY", "1", "0.25..4", LIVE},
+    {"GAMEPLAY_DISTANCE_SENSITIVITY", "1", "0.25..4", LIVE}, {"GAMEPLAY_ITEM_SENSITIVITY", "1", "0.25..4", LIVE},
+    {"GAMEPLAY_WEAPON_WHEEL", "1", "0|1", LIVE}, {"GAMEPLAY_WEAPON_SENSITIVITY", "1", "0.25..4", LIVE},
     {"MENU_LANG", "", "en|ru|pt-BR|zh-Hans", LIVE},
     // plat_font_path on Linux: 1 asks fontconfig which file draws the language, 0 keeps the fixed distribution
     // paths. A rebuild of the atlas reads it, so a change shows on the next window size or language switch.
@@ -186,6 +209,8 @@ static const CfgMeta metas[] = {
     {"ASTC", "auto", "auto|gpu|native|cpu", RESTART}, {"MEMORY", "auto", "auto|import|mirror|verify", RESTART},
     {"TEX_ALIAS", "1", "0|1", RESTART}, {"TEX_VRAM_PRESSURE", "90", "0..100", RESTART},
     {"TEX_RELEASED_MIB", "256", "0..65536", RESTART}, {"TEX_BLOCK_MIB", "64", "0..1024", RESTART}, {"VMA_BLOCK_MIB", "64", "0..1024", RESTART}, {"ASTC_BC", "", "0|1", RESTART}, {"ZSTD_NATIVE", "1", "0|1", RESTART}, {"ZSTD_CHECK", "0", "0|1", RESTART},
+    // crash guards: code patch sets (recomp/patches-v*.txt) over game reads that crash on stale data
+    {"OPTREF_GUARD", "1", "0|1", RESTART}, {"ABILITY_GUARD", "1", "0|1", RESTART}, {"REPORT_GUARD", "1", "0|1", RESTART},
     // render fixes
     {"LOD_GUARD", "1", "0|1", RESTART}, {"FIX_C0", "1", "0|1", RESTART}, {"FIX_ZERO", "1", "0|1", RESTART},
     {"BIND_SKIP", "1", "0|1", RESTART}, {"SHADER_MEMO", "1", "0|1", RESTART}, {"PIPE_MEMO", "1", "0|1", RESTART}, {"TEX_MEMO", "1", "0|1", RESTART},
@@ -352,16 +377,36 @@ static const char *raw_get(const char *name) {
 // picture between black bars. The sizes are the ones the installer lays the HUD out for (installer/steps.py
 // ASPECT_SIZES, ui/menu.cpp row_output_res): of the display's shape within 1%, the smallest at least 1080 high that fits
 // the display, else the largest that fits. A 16:9 display, an unknown one or one of another shape keeps 1920x1080.
-// Xbox and keyboard prompts have a folder for each of these sizes (romfs-patches-xbox-<w>x<h>, -xbox-label-<w>x<h>,
-// -pc-<w>x<h>, installer/steps.py Prepare): they keep 1920x1080 only when the one for the display's size is missing,
-// as in a source build without make_romfs_patches.py --prompts <style> --aspect or an install by an older setup,
-// where a default of another shape would trade the prompts the player chose for the Switch ones.
+// Xbox and keyboard prompts need their folder for that size's shape too (romfs-patches-xbox-<w>x<h>, -xbox-label-,
+// -pc-, written by installer/steps.py Shapes for the style totk.ini selects and the connected displays' shapes): they
+// keep 1920x1080 when it is missing, as in a source build without make_romfs_patches.py --prompts <style> --aspect or
+// after a switch of prompts in the menu, where a default of another shape would trade the prompts the player chose for
+// the Switch ones.
 static const unsigned SHAPED[][2] = {
     {2560, 1080}, {3440, 1440}, {3840, 1600}, {5120, 2160},             // 21:9
     {3840, 1080}, {5120, 1440},                                         // 32:9
     {1280, 800}, {1680, 1050}, {1920, 1200}, {2560, 1600},              // 16:10
     {1920, 1280}, {2160, 1440}, {2256, 1504}, {2880, 1920}, {3000, 2000}, // 3:2
 };
+
+// The folder size of w x h's shape: of SHAPED within 1% of its aspect ratio, the closest, the first of equal ones
+// (5120x2160 takes 2560x1080). The UI layout depends on the aspect ratio alone (tools/ultrawide_layout.py apply), so
+// the setup writes one romfs-patches-<w>x<h> per shape, named after this size (installer/screens.py shape_size, the
+// same rule), and romfs.c overlay_init looks for it. 0 for 16:9 and for a shape without a layout.
+int cfg_shape_size(unsigned w, unsigned h, unsigned out[2]) {
+    if (!w || !h) return 0;
+    double r = (double)w / h, err = 0;
+    if (fabs(r / (16.0 / 9.0) - 1) <= 0.01) return 0;
+    int best = -1;
+    for (int i = 0; i < (int)(sizeof SHAPED / sizeof *SHAPED); i++) {
+        double e = fabs((double)SHAPED[i][0] / SHAPED[i][1] / r - 1);
+        if (e <= 0.01 && (best < 0 || e < err)) best = i, err = e;
+    }
+    if (best < 0) return 0;
+    out[0] = SHAPED[best][0], out[1] = SHAPED[best][1];
+    return 1;
+}
+
 static char screen_res[16];   // set once by cfg_init, "" for none
 // romfs-patches-xbox-, romfs-patches-xbox-label- and romfs-patches-pc-<screen_res> have a manifest (set once by
 // cfg_init)

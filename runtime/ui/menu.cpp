@@ -720,6 +720,7 @@ static void tab_screen(float scale) {
     row_shadow_range();
     row_grass_range();
     opt_slider("TOTK_PCSS", UI_MENU_PCSS, 0, 200, UI_MENU_PCSS_DESC, 10, "%.0f %%");
+    opt_slider("TOTK_PCSS_K", UI_MENU_PCSS, 0.005f, 0.5f, UI_MENU_PCSS_DESC, 0.005f, "penumbra k %.3f");   // TEMP
     opt_slider("TOTK_CONTACT_SHADOWS", UI_MENU_CONTACT_SHADOWS, 0, 100, UI_MENU_CONTACT_SHADOWS_DESC, 10, "%.0f %%");
     opt_toggle("TOTK_DLAA", UI_MENU_DLAA, UI_MENU_DLAA_DESC);
     static const UiTextId dlss[] = {UI_MENU_DLSS_DLAA, UI_MENU_DLSS_QUALITY, UI_MENU_DLSS_BALANCED,

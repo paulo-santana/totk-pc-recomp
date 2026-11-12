@@ -39,10 +39,15 @@ static struct {
 } C;
 
 int vk_contact_strength(void) {
-    if (!C.read) {   // once: the scan asks at every draw
+    // TEMP (live tuning): re-read when the menu changed a setting. Going from 0 to on still needs a start with it on:
+    // the scene textures get their storage usage (vk_texture.c) and the pipeline is built only then.
+    static unsigned seen = ~0u;
+    unsigned v = cfg_version();
+    if (!C.read || v != seen) {
         int s = cfg_int("TOTK_CONTACT_SHADOWS");
         C.strength = s < 0 ? 0 : s > 100 ? 100 : s;
         C.read = 1;
+        seen = v;
     }
     return C.strength;
 }

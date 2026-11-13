@@ -26,6 +26,7 @@ Switch icons.
 Needs fontTools (tools/requirements-installer.txt, tools/requirements-py314.txt).
 """
 import io
+import os
 import struct
 import zlib
 
@@ -515,15 +516,22 @@ class PolygonPen(BasePen):
 
 def rasterize(draw, size):
     """A size x size coverage mask (0..255, rows top down) of draw's outline, fitted into the square, nonzero winding."""
+    return rasterize_rect(draw, size, size, HUD_MARGIN)
+
+
+def rasterize_rect(draw, width, height, margin):
+    """A width x height coverage mask (0..255, rows top down) of draw's outline, fitted into the rectangle inside margin
+    pixels on each side and centred, nonzero winding."""
     rec = RecordingPen(); draw(rec)
     box = BoundsPen(None); rec.replay(box); x0, y0, x1, y1 = box.bounds
-    inner = size - 2 * HUD_MARGIN; scale = inner / max(x1 - x0, y1 - y0)
-    ox = HUD_MARGIN + (inner - (x1 - x0) * scale) / 2 - x0 * scale
-    oy = HUD_MARGIN + (inner - (y1 - y0) * scale) / 2 - y0 * scale
-    flat = PolygonPen(); rec.replay(TransformPen(flat, (scale, 0, 0, -scale, ox, size - oy)))   # font y up -> rows down
+    inner_w, inner_h = width - 2 * margin, height - 2 * margin
+    scale = min(inner_w / (x1 - x0), inner_h / (y1 - y0))
+    ox = margin + (inner_w - (x1 - x0) * scale) / 2 - x0 * scale
+    oy = margin + (inner_h - (y1 - y0) * scale) / 2 - y0 * scale
+    flat = PolygonPen(); rec.replay(TransformPen(flat, (scale, 0, 0, -scale, ox, height - oy)))   # font y up -> rows down
     edges = [(a, b) for poly in flat.polygons for a, b in zip(poly, poly[1:] + poly[:1]) if a[1] != b[1]]
-    n = size * SUPERSAMPLE; cover = [0] * (size * size)
-    for row in range(n):
+    nx, ny = width * SUPERSAMPLE, height * SUPERSAMPLE; cover = [0] * (width * height)
+    for row in range(ny):
         y = (row + 0.5) / SUPERSAMPLE
         crossings = sorted((a[0] + (y - a[1]) * (b[0] - a[0]) / (b[1] - a[1]), 1 if b[1] > a[1] else -1)
                            for a, b in edges if min(a[1], b[1]) <= y < max(a[1], b[1]))
@@ -533,8 +541,8 @@ def rasterize(draw, size):
                 start = x
             winding += d
             if winding == 0:
-                for col in range(max(0, round(start * SUPERSAMPLE)), min(n, round(x * SUPERSAMPLE))):
-                    cover[(row // SUPERSAMPLE) * size + col // SUPERSAMPLE] += 1
+                for col in range(max(0, round(start * SUPERSAMPLE)), min(nx, round(x * SUPERSAMPLE))):
+                    cover[(row // SUPERSAMPLE) * width + col // SUPERSAMPLE] += 1
     return bytes(min(255, c * 255 // (SUPERSAMPLE * SUPERSAMPLE)) for c in cover)
 
 
@@ -562,6 +570,129 @@ def bntx_redraw(data, base, textures, icons):
                 at = gob_offset(x, y, (w + 63) // 64, block)
                 assert at < size, f'{name}: pixel ({x}, {y}) past the image'
                 data[start + at] = mask[y * w + x]
+        done.append(name)
+    missing = sorted(set(textures) - set(done))
+    assert not missing, f'not in the texture list: {", ".join(missing)}'
+    return done
+
+
+# ---- the controller picture. The game draws its Pro Controller (Controller_Pro, and Controller_Pro1 in the tutorials'
+# button guide, PaActionGuide_00) as a flat illustration: a dark body outlined in black, lighter buttons, on a transparent
+# background, ASTC 4x4 sRGB. With --prompts playstation the same textures hold a DualSense in that style, from the
+# controller_playstation5 glyph of Kenney's Input Prompts font (CC0, tools/data/kenney_input): the glyph's holes
+# (buttons, touchpad) become the lighter grey, and an outline is grown around it. The R and ZR guide lines sit on the
+# shoulders at the top, where the DualSense has its own.
+CONTROLLER_TEXTURES = ('Controller_Pro', 'Controller_Pro1')
+CONTROLLER_GLYPH = 'controller_playstation5'
+CONTROLLER_FONT = os.path.join(os.path.dirname(__file__), 'data', 'kenney_input', 'kenney_input_playstation_series.otf')
+CONTROLLER_COLORS = dict(body=(0x2E, 0x2E, 0x2E), button=(0x74, 0x74, 0x74), outline=(0x10, 0x10, 0x10))
+CONTROLLER_MARGIN, CONTROLLER_OUTLINE = 14, 3
+ASTC_4X4_SRGB = 0x2D06
+
+
+def controller_rgba(width, height):
+    """width x height RGBA bytes of the DualSense picture (straight alpha, sRGB colours)."""
+    glyphs = TTFont(CONTROLLER_FONT).getGlyphSet()
+    cover = rasterize_rect(glyphs[CONTROLLER_GLYPH].draw, width, height, CONTROLLER_MARGIN + CONTROLLER_OUTLINE)
+    # What the glyph does not cover and the picture's border cannot reach is a hole inside the body: a button.
+    outside, queue = bytearray(width * height), []
+    for x in range(width):
+        queue += [x, (height - 1) * width + x]
+    for y in range(height):
+        queue += [y * width, y * width + width - 1]
+    while queue:
+        i = queue.pop()
+        if outside[i] or cover[i] >= 128:
+            continue
+        outside[i] = 1
+        x = i % width
+        if x:
+            queue.append(i - 1)
+        if x < width - 1:
+            queue.append(i + 1)
+        if i >= width:
+            queue.append(i - width)
+        if i < width * (height - 1):
+            queue.append(i + width)
+    body, button, edge = (CONTROLLER_COLORS[k] for k in ('body', 'button', 'outline'))
+    reach = CONTROLLER_OUTLINE + 1
+    out = bytearray(width * height * 4)
+    for y in range(height):
+        for x in range(width):
+            i = y * width + x
+            c = cover[i]
+            if not outside[i]:   # on the glyph, or in a hole of it
+                t = c / 255
+                rim = c < 255 and (x == 0 or outside[i - 1] or x == width - 1 or outside[i + 1] or y == 0
+                                   or outside[i - width] or y == height - 1 or outside[i + width])
+                under = edge if rim else button   # antialiasing at the body's rim blends into the outline, in a hole into a button
+                rgb = tuple(round(under[k] + (body[k] - under[k]) * t) for k in range(3))
+                alpha = 255
+            elif c:   # the glyph's antialiased edge, over the outline
+                t = c / 255
+                rgb, alpha = tuple(round(edge[k] + (body[k] - edge[k]) * t) for k in range(3)), 255
+            else:
+                # an outline CONTROLLER_OUTLINE pixels wide around the body: its distance to the nearest covered pixel
+                best = reach * reach
+                for yy in range(max(0, y - reach), min(height, y + reach + 1)):
+                    row = yy * width
+                    for xx in range(max(0, x - reach), min(width, x + reach + 1)):
+                        if cover[row + xx] >= 128:
+                            d = (xx - x) ** 2 + (yy - y) ** 2
+                            if d < best:
+                                best = d
+                alpha = round(255 * max(0.0, min(1.0, CONTROLLER_OUTLINE + 0.5 - best ** 0.5)))
+                rgb = edge
+            out[i * 4:i * 4 + 4] = bytes(rgb) + bytes([alpha])
+    return bytes(out)
+
+
+def astc_blocks(rgba, width, height):
+    """The ASTC 4x4 sRGB blocks (16 bytes each, row-major) of width x height RGBA bytes."""
+    try:
+        import astc_encoder as astc
+    except ImportError as err:
+        raise SystemExit('the DualSense controller picture needs astc-encoder-py (tools/requirements-py314.txt)') from err
+    context = astc.ASTCContext(astc.ASTCConfig(astc.ASTCProfile.LDR_SRGB, 4, 4, 1, astc.ASTCQualityPreset.THOROUGH))
+    return bytes(context.compress(astc.ASTCImage(astc.ASTCType.U8, width, height, 1, rgba),
+                                  astc.ASTCSwizzle.from_str('RGBA')))
+
+
+def block_offset(x, y, width_gobs, block_height, bytes_per_block=16):
+    """Byte offset of block (x, y) in a Tegra block-linear surface of bytes_per_block per block (gob_offset's general form)."""
+    xb = x * bytes_per_block
+    return ((y // (8 * block_height)) * 512 * block_height * width_gobs + (xb // 64) * 512 * block_height
+            + ((y % (8 * block_height)) // 8) * 512 + ((xb % 64) // 32) * 256 + ((y % 8) // 2) * 64
+            + ((xb % 32) // 16) * 32 + (y % 2) * 16 + (xb % 16))
+
+
+def bntx_controller(data, base, textures):
+    """Paint the DualSense picture over each texture of textures (name without the ^ suffix) in the BNTX at data[base:] (a
+    bytearray), in place; they must be ASTC 4x4 sRGB with one mip. Returns the names painted."""
+    assert data[base:base + 4] == b'BNTX' and data[base + 0x20:base + 0x24] == b'NX  '
+    count, table = struct.unpack_from('<IQ', data, base + 0x24)
+    cache, done = {}, []
+    for k in range(count):
+        info = base + struct.unpack_from('<Q', data, base + table + 8 * k)[0]
+        assert data[info:info + 4] == b'BRTI'
+        at = base + struct.unpack_from('<Q', data, info + 0x60)[0]
+        name = data[at + 2:at + 2 + struct.unpack_from('<H', data, at)[0]].decode().split('^')[0]
+        if name not in textures:
+            continue
+        mips, fmt = struct.unpack_from('<H', data, info + 0x16)[0], struct.unpack_from('<I', data, info + 0x1c)[0]
+        (w, h), layout = struct.unpack_from('<II', data, info + 0x24), struct.unpack_from('<I', data, info + 0x34)[0]
+        assert fmt == ASTC_4X4_SRGB and mips == 1, f'{name}: format {fmt:#x}, {w}x{h}, {mips} mips'
+        if (w, h) not in cache:
+            cache[w, h] = astc_blocks(controller_rgba(w, h), w, h)
+        blocks = cache[w, h]
+        start = base + struct.unpack_from('<Q', data, base + struct.unpack_from('<Q', data, info + 0x70)[0])[0]
+        size, block_height = struct.unpack_from('<I', data, info + 0x50)[0], 1 << (layout & 7)
+        columns, rows = (w + 3) // 4, (h + 3) // 4
+        for by in range(rows):
+            for bx in range(columns):
+                at = block_offset(bx, by, (columns * 16 + 63) // 64, block_height)
+                assert at + 16 <= size, f'{name}: block ({bx}, {by}) past the image'
+                data[start + at:start + at + 16] = blocks[(by * columns + bx) * 16:(by * columns + bx) * 16 + 16]
         done.append(name)
     missing = sorted(set(textures) - set(done))
     assert not missing, f'not in the texture list: {", ".join(missing)}'

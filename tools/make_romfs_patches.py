@@ -44,7 +44,9 @@ auto). The face buttons become ○ × △ □ (circle, cross, triangle and squar
 Plus and Minus Options and Share, and the d-pad keeps its cross. The game's text fonts carry the four shapes, so the
 diamond's letters become those characters. playstation-xbox lays the diamond out as xbox-label does: a PlayStation
 pad's cross, circle, square and triangle sit where an Xbox pad's A, B, X and Y do. Drawn from the game's own files like
-the Xbox prompts (tools/button_icons.py).
+the Xbox prompts (tools/button_icons.py), except the DualSense picture that replaces the Pro Controller illustration
+(Controller_Pro and Controller_Pro1 of the Common archive, ASTC 4x4): it is the controller_playstation5 glyph of Kenney's
+Input Prompts (CC0, tools/data/kenney_input), which needs astc-encoder-py to write the texture.
 --xbox-prompts is the older name of --prompts xbox. With --aspect, romfs-patches-<style>-<w>x<h> (romfs-patches-xbox-
 <w>x<h>, romfs-patches-playstation-xbox-<w>x<h>, ...): the same prompts with that shape's UI layout.
 --prompts pc: keyboard and mouse prompts, for prompts = pc (romfs-patches-pc, or romfs-patches-pc-<w>x<h> with
@@ -495,6 +497,12 @@ if args.prompts:
         assert 'blyt/DoCommand_00.bflyt' in letters, 'no letter panes in blyt/DoCommand_00.bflyt'
     hud = icons.bntx_redraw(blarc, bntx, icons.PC_HUD_TEXTURES if pc else icons.PS_HUD_TEXTURES if ps else icons.HUD_TEXTURES,
                             drawn)
+    controller = []
+    if ps:
+        if importlib.util.find_spec('astc_encoder'):
+            controller = icons.bntx_controller(blarc, bntx, icons.CONTROLLER_TEXTURES)
+        else:   # the rest of the prompts do not need it: the game keeps its Pro Controller picture
+            print('note: astc-encoder-py is missing, so the controller picture stays the Pro Controller', flush=True)
     outputs[ARCHIVE] = bytes(blarc)
     fonts = {}   # each distinct font is drawn once (1.4.3's four archives hold the same one)
     for path, bfarc in archives.items():
@@ -518,7 +526,7 @@ if args.prompts:
     if grown:
         outputs[RESTBL] = icons.grow_restbl(unpack(RESTBL), grown)
     prompts = dict(style=args.prompts, textures=KEY_TEXTURES if by_position else [], letters=letters,
-                   diamond=len(diamond), messages=messages, hud=hud, icons=len(drawn), fonts=FONTS, grown=grown)
+                   diamond=len(diamond), messages=messages, hud=hud, controller=controller, icons=len(drawn), fonts=FONTS, grown=grown)
 
 def reusable(path, contents, dictionary):
     """The --reuse folder's copy of path when it holds these contents under the same dictionary, else None. The level 19

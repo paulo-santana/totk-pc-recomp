@@ -9,8 +9,9 @@ with the bundled clang (hostcheck.c).
 
 Install folder: exefs/, romfs/ (romfs.bin, index.json), profile/, shared-fonts/ (Chinese and Korean text), totk.exe
 and its DLLs, nvngx_dlss.dll (with --dlss), romfs-index.bin, romfs-patches/, romfs-patches-xbox/,
-romfs-patches-xbox-label/, romfs-patches-pc/, romfs-patches-<w>x<h>/ and romfs-patches-<style>-<w>x<h>/ (for the
-screen shapes and the prompts style this player needs, installer/screens.py), totk_xlate.exe, the
+romfs-patches-xbox-label/, romfs-patches-playstation/, romfs-patches-playstation-xbox/, romfs-patches-pc/,
+romfs-patches-<w>x<h>/ and romfs-patches-<style>-<w>x<h>/ (for the screen shapes and the prompts style this player
+needs, installer/screens.py), totk_xlate.exe, the
 shader state of totk.exe --prepare-shaders, totk.ini, totk-install.json.
 Temp folder (<temp>/<dest name>-<hash>): check/ (ExeFS of both inputs, the host check), unpacked/ (the NSP of an NSZ
 or XCZ input until the extraction is done), gen/ (C), build/ (objects), logs/. The cleanup keeps gen/, build/ and
@@ -1054,9 +1055,11 @@ class Prepare(Step):
         xlate_id = layout.xlate.with_suffix('.id')
         tools = [layout.tools / n for n in ('prepare_shaders.py', 'shader_census.py', 'make_romfs_patches.py',
                                             'pack_shader_cache.py', 'ultrawide_layout.py', 'button_icons.py')]
-        # not the compile key: a rebuild for the mods' code cheats keeps the prepared shaders
+        # not the compile key: a rebuild for the mods' code cheats keeps the prepared shaders. The game language is in
+        # it because the prompt folders carry that language's fonts and Mals (make_romfs_patches.py --lang): changing
+        # the language in a later setup run rebuilds them.
         return fingerprint('prepare-2', ctx.keys['extract'], runtime_key(ctx), layout.xlate, xlate_id,
-                           shader_list_text(layout), *tools)
+                           shader_list_text(layout), requested_lang(ctx), *tools)
 
     def current(self, ctx, record):
         dest = ctx.dest
@@ -1093,19 +1096,22 @@ class Prepare(Step):
                               dest / 'romfs-patches'])
         if code:
             raise InstallError('prepare.romfs_patches_failed', code=code, log=str(log))
-        # The same with Xbox button icons in the prompts, for prompts = xbox (make_romfs_patches.py --prompts):
-        # romfs-patches-xbox for the Nintendo pad layout, romfs-patches-xbox-label for xbox and auto (runtime/input_map.c
-        # input_prompts_folder). Both are written on every install, so the menu choices work without another run of
+        # The same with Xbox and PlayStation button icons in the prompts, for prompts = xbox and playstation
+        # (make_romfs_patches.py --prompts): romfs-patches-xbox for the Nintendo pad layout, romfs-patches-xbox-label
+        # for xbox and auto, and romfs-patches-playstation / -playstation-xbox likewise (runtime/input_map.c
+        # input_prompts_folder). All are written on every install, so the menu choices work without another run of
         # the setup. Optional: when one fails, the game keeps the Switch prompts with that layout and the menu says the
         # files are missing, so the setup warns once and goes on. The keyboard and mouse prompts are the PcPrompts
         # step's: they follow totk.ini's bindings.
+        # --lang keeps only the installed game language's font and Mals, which cuts each pack from about 70 MB to 14 MB
+        # (20 to 28 MB for Chinese or Korean); the key above rebuilds them after a language change.
         failed = None
-        for style in ('xbox', 'xbox-label'):
+        for style in ('xbox', 'xbox-label', 'playstation', 'playstation-xbox'):
             out = dest / f'romfs-patches-{style}'
             remove(out)
             code, log = run_tool(ctx, f'prepare-{style}', layout.tools / 'make_romfs_patches.py',
                                  ['--version', version_tag(game_version(ctx)), '--romfs', dest / 'romfs', '--out', out,
-                                  '--prompts', style])
+                                  '--prompts', style, '--lang', ctx.lang])
             if code:
                 remove(out)
                 failed = failed or (code, log)
@@ -1197,7 +1203,7 @@ class PcPrompts(Step):
 
 # ---- 6b. screen shapes
 
-SHAPED_FOLDER = re.compile(r'^romfs-patches(?:-xbox|-xbox-label|-pc)?-\d+x\d+$')
+SHAPED_FOLDER = re.compile(r'^romfs-patches(?:-xbox|-xbox-label|-playstation|-playstation-xbox|-pc)?-\d+x\d+$')
 
 
 class Shapes(Step):

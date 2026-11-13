@@ -142,11 +142,14 @@ def ini_value(text, name):
 
 def prompts_style(text):
     """The prompts' folder suffix the settings select, as runtime/input_map.c input_prompts_pick and
-    input_prompts_folder pick it at start: 'pc', 'xbox' (Nintendo pad layout), 'xbox-label' (any other) or None for the
-    game's own prompts, the default without a totk.ini."""
+    input_prompts_folder pick it at start: 'pc', 'xbox' (Nintendo pad layout), 'xbox-label' (any other), 'playstation'
+    (Nintendo pad layout), 'playstation-xbox' (any other) or None for the game's own prompts, the default without a
+    totk.ini."""
     p, layout = ini_value(text, 'prompts'), (ini_value(text, 'pad_layout') or '').lower()
     if p and p.lower() == 'pc':
         return 'pc'
+    if p and p.lower() == 'playstation':
+        return 'playstation' if layout in ('nintendo', 'xbox_prompts') else 'playstation-xbox'
     if not (p.lower() == 'xbox' if p else layout == 'xbox_prompts'):
         return None
     return 'xbox' if layout in ('nintendo', 'xbox_prompts') else 'xbox-label'

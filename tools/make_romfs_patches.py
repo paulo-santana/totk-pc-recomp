@@ -501,6 +501,7 @@ if args.prompts:
     if ps:
         if importlib.util.find_spec('astc_encoder'):
             controller = icons.bntx_controller(blarc, bntx, icons.CONTROLLER_TEXTURES)
+            controller += icons.bntx_shoulders(blarc, bntx, icons.SHOULDER_TEXTURES)
         else:   # the rest of the prompts do not need it: the game keeps its Pro Controller picture
             print('note: astc-encoder-py is missing, so the controller picture stays the Pro Controller', flush=True)
     outputs[ARCHIVE] = bytes(blarc)

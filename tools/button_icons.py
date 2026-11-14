@@ -25,7 +25,9 @@ Switch icons.
 
 Needs fontTools (tools/requirements-installer.txt, tools/requirements-py314.txt).
 """
+import functools
 import io
+import math
 import os
 import struct
 import zlib
@@ -584,6 +586,7 @@ def bntx_redraw(data, base, textures, icons):
 # (buttons, touchpad) become the lighter grey, and an outline is grown around it. The R and ZR guide lines sit on the
 # shoulders at the top, where the DualSense has its own.
 CONTROLLER_TEXTURES = ('Controller_Pro', 'Controller_Pro1')
+SHOULDER_TEXTURES = ('ConProR_00', 'ConProR_Line', 'ConProZR_00', 'ConProZR_Line')
 CONTROLLER_GLYPH = 'controller_playstation5'
 CONTROLLER_FONT = os.path.join(os.path.dirname(__file__), 'data', 'kenney_input', 'kenney_input_playstation_series.otf')
 CONTROLLER_COLORS = dict(body=(0x2E, 0x2E, 0x2E), button=(0x74, 0x74, 0x74), outline=(0x10, 0x10, 0x10))
@@ -626,8 +629,11 @@ def controller_draw(pen):
         rec.replay(TransformPen(pen, matrix))
 
 
-def controller_rgba(width, height):
-    """width x height RGBA bytes of the DualSense picture (straight alpha, sRGB colours)."""
+@functools.lru_cache(maxsize=None)
+def controller_cover(width, height):
+    """(cover, outside) of the DualSense in a width x height picture: the glyph's coverage mask (0..255, rows top down)
+    and a flag per pixel for those the picture's border reaches without crossing the glyph (the body's holes, its
+    buttons, are the ones that are not)."""
     fit = (CONTROLLER_BOX[0] * width, CONTROLLER_BOX[1] * height, CONTROLLER_BOX[2] * width, CONTROLLER_BOX[3] * height)
     cover = rasterize_rect(controller_draw, width, height, 0, fit)
     # What the glyph does not cover and the picture's border cannot reach is a hole inside the body: a button.
@@ -650,6 +656,12 @@ def controller_rgba(width, height):
             queue.append(i - width)
         if i < width * (height - 1):
             queue.append(i + width)
+    return cover, outside
+
+
+def controller_rgba(width, height):
+    """width x height RGBA bytes of the DualSense picture (straight alpha, sRGB colours)."""
+    cover, outside = controller_cover(width, height)
     body, button, edge = (CONTROLLER_COLORS[k] for k in ('body', 'button', 'outline'))
     reach = CONTROLLER_OUTLINE + 1
     out = bytearray(width * height * 4)
@@ -702,12 +714,13 @@ def block_offset(x, y, width_gobs, block_height, bytes_per_block=16):
             + ((xb % 32) // 16) * 32 + (y % 2) * 16 + (xb % 16))
 
 
-def bntx_controller(data, base, textures):
-    """Paint the DualSense picture over each texture of textures (name without the ^ suffix) in the BNTX at data[base:] (a
-    bytearray), in place; they must be ASTC 4x4 sRGB with one mip. Returns the names painted."""
+def bntx_blocks(data, base, textures, fmt, bytes_per_block, blocks_of):
+    """Write blocks_of(name, width, height) (the compressed blocks, 4x4 pixels each, row-major) as the image of each
+    texture of textures (name without the ^ suffix) in the BNTX at data[base:] (a bytearray), in place; they must be of
+    format fmt with one mip. Returns the names written."""
     assert data[base:base + 4] == b'BNTX' and data[base + 0x20:base + 0x24] == b'NX  '
     count, table = struct.unpack_from('<IQ', data, base + 0x24)
-    cache, done = {}, []
+    done = []
     for k in range(count):
         info = base + struct.unpack_from('<Q', data, base + table + 8 * k)[0]
         assert data[info:info + 4] == b'BRTI'
@@ -715,24 +728,164 @@ def bntx_controller(data, base, textures):
         name = data[at + 2:at + 2 + struct.unpack_from('<H', data, at)[0]].decode().split('^')[0]
         if name not in textures:
             continue
-        mips, fmt = struct.unpack_from('<H', data, info + 0x16)[0], struct.unpack_from('<I', data, info + 0x1c)[0]
+        mips, found = struct.unpack_from('<H', data, info + 0x16)[0], struct.unpack_from('<I', data, info + 0x1c)[0]
         (w, h), layout = struct.unpack_from('<II', data, info + 0x24), struct.unpack_from('<I', data, info + 0x34)[0]
-        assert fmt == ASTC_4X4_SRGB and mips == 1, f'{name}: format {fmt:#x}, {w}x{h}, {mips} mips'
-        if (w, h) not in cache:
-            cache[w, h] = astc_blocks(controller_rgba(w, h), w, h)
-        blocks = cache[w, h]
+        assert found == fmt and mips == 1, f'{name}: format {found:#x}, {w}x{h}, {mips} mips'
+        blocks = blocks_of(name, w, h)
         start = base + struct.unpack_from('<Q', data, base + struct.unpack_from('<Q', data, info + 0x70)[0])[0]
         size, block_height = struct.unpack_from('<I', data, info + 0x50)[0], 1 << (layout & 7)
         columns, rows = (w + 3) // 4, (h + 3) // 4
+        assert len(blocks) == columns * rows * bytes_per_block, name
         for by in range(rows):
             for bx in range(columns):
-                at = block_offset(bx, by, (columns * 16 + 63) // 64, block_height)
-                assert at + 16 <= size, f'{name}: block ({bx}, {by}) past the image'
-                data[start + at:start + at + 16] = blocks[(by * columns + bx) * 16:(by * columns + bx) * 16 + 16]
+                at = block_offset(bx, by, (columns * bytes_per_block + 63) // 64, block_height, bytes_per_block)
+                assert at + bytes_per_block <= size, f'{name}: block ({bx}, {by}) past the image'
+                n = (by * columns + bx) * bytes_per_block
+                data[start + at:start + at + bytes_per_block] = blocks[n:n + bytes_per_block]
         done.append(name)
     missing = sorted(set(textures) - set(done))
     assert not missing, f'not in the texture list: {", ".join(missing)}'
     return done
+
+
+def bntx_controller(data, base, textures):
+    """Paint the DualSense picture over each texture of textures (ASTC 4x4 sRGB) of the BNTX at data[base:]; returns the
+    names painted."""
+    return bntx_blocks(data, base, textures, ASTC_4X4_SRGB, 16,
+                       lambda name, w, h: astc_blocks(controller_rgba(w, h), w, h))
+
+
+# The guide's R and ZR highlights (PaActionGuide_00; L and ZL are the same images mirrored): a fill (ConPro<K>_00) and an
+# outline (ConPro<K>_Line), BC4 masks stretched over a pane that sits on the Pro Controller's shoulder. Each is
+# (pane centre in the controller picture's pixels, pane size in layout units); the picture is shown at 0.9, so a layout
+# unit is 1.1111 picture pixels tall and, the 570-wide pane showing a 580-wide image, 1.1306 wide. On the DualSense they
+# are two crescents along the outline of its shoulder: the trigger's at the edge, the bumper's just inside it.
+SHOULDER_PANES = {'ConProR': ((407.6, 62.2), (102, 44), (17, 33), (392, 466)),
+                  'ConProZR': ((418.9, 45.6), (74, 49), (0, 16), (398, 464))}   # ..., band's distances, its x span
+SMOOTH_OUTLINE = 6   # the outline the crescents follow is the body's blurred by this many pixels, so the trigger's step does not show
+SHOULDER_UNIT = (580 / 570 / 0.9, 1 / 0.9)
+SHOULDER_LINE = 2   # the outline's width in texels
+BC4_UNORM = 0x1D01
+
+
+def outline_distance(outside, width, height):
+    """Per pixel, the distance (chamfer 3-4) to the nearest pixel of outside, for the whole picture."""
+    inf = 1 << 20
+    dist = [0 if outside[i] else inf for i in range(width * height)]
+    for y in range(height):
+        for x in range(width):
+            i = y * width + x
+            if dist[i]:
+                best = dist[i]
+                if x:
+                    best = min(best, dist[i - 1] + 3)
+                if y:
+                    best = min(best, dist[i - width] + 3)
+                    if x:
+                        best = min(best, dist[i - width - 1] + 4)
+                    if x < width - 1:
+                        best = min(best, dist[i - width + 1] + 4)
+                dist[i] = best
+    for y in range(height - 1, -1, -1):
+        for x in range(width - 1, -1, -1):
+            i = y * width + x
+            if dist[i]:
+                best = dist[i]
+                if x < width - 1:
+                    best = min(best, dist[i + 1] + 3)
+                if y < height - 1:
+                    best = min(best, dist[i + width] + 3)
+                    if x < width - 1:
+                        best = min(best, dist[i + width + 1] + 4)
+                    if x:
+                        best = min(best, dist[i + width - 1] + 4)
+                dist[i] = best
+    return [d / 3 for d in dist]
+
+
+@functools.lru_cache(maxsize=None)
+def shoulder_distance(width, height):
+    """(distance of each pixel to the body's smoothed outline, whether it is outside that outline) for the picture."""
+    outside = controller_cover(width, height)[1]
+    inside = [0.0 if outside[i] else 1.0 for i in range(width * height)]
+    r = SMOOTH_OUTLINE   # a box blur along the rows, then along the columns
+    rows = []
+    for y in range(height):
+        acc = [0.0]
+        for v in inside[y * width:(y + 1) * width]:
+            acc.append(acc[-1] + v)
+        rows += [(acc[min(width, x + r + 1)] - acc[max(0, x - r)]) / (min(width, x + r + 1) - max(0, x - r))
+                 for x in range(width)]
+    inside = [0.0] * (width * height)
+    for x in range(width):
+        acc = [0.0]
+        for y in range(height):
+            acc.append(acc[-1] + rows[y * width + x])
+        for y in range(height):
+            lo, hi = max(0, y - r), min(height, y + r + 1)
+            inside[y * width + x] = (acc[hi] - acc[lo]) / (hi - lo)
+    smooth = bytearray(1 if v < 0.5 else 0 for v in inside)
+    return outline_distance(smooth, width, height), smooth
+
+
+def shoulder_mask(name, width, height, picture=(580, 340)):
+    """width x height bytes (0..255) of the fill or outline texture `name` (ConProR_00, ConProR_Line, ConProZR_00,
+    ConProZR_Line) for the DualSense: its R or ZR crescent, with rounded ends inside the pane."""
+    key, kind = name.rsplit('_', 1)
+    (cx, cy), (pane_w, pane_h), (near, far), (span_lo, span_hi) = SHOULDER_PANES[key]
+    dist, outside = shoulder_distance(*picture)
+    ux, uy = SHOULDER_UNIT
+    mid, half_w, half_h, radius = (span_lo + span_hi) / 2, (span_hi - span_lo) / 2, pane_h * uy / 2 - 2, 10
+
+    def band(px, py):   # 0..1 coverage of the crescent at a point of the picture
+        x, y = min(picture[0] - 1, max(0, round(px - 0.5))), min(picture[1] - 1, max(0, round(py - 0.5)))
+        d = dist[y * picture[0] + x]
+        if outside[y * picture[0] + x]:
+            return 0.0
+        qx, qy = abs(px - mid) - half_w + radius, abs(py - cy) - half_h + radius   # a rounded rectangle's distance
+        box = math.hypot(max(qx, 0), max(qy, 0)) + min(max(qx, qy), 0) - radius
+        return (max(0.0, min(1.0, d - near + 0.5)) * max(0.0, min(1.0, far - d + 0.5))
+                * max(0.0, min(1.0, 0.5 - box)))
+    fill = []
+    for j in range(height):
+        for i in range(width):
+            total = 0.0
+            for sj in range(3):
+                for si in range(3):
+                    total += band(cx + (i + (si + 0.5) / 3 - width / 2) * pane_w / width * ux,
+                                  cy + (j + (sj + 0.5) / 3 - height / 2) * pane_h / height * uy)
+            fill.append(total / 9)
+    if kind == '00':
+        return bytes(round(255 * v) for v in fill)
+    # the outline: the fill less itself shrunk by SHOULDER_LINE texels (a square window's minimum)
+    r, out = SHOULDER_LINE, bytearray(width * height)
+    for j in range(height):
+        for i in range(width):
+            inner = min(fill[jj * width + ii] if 0 <= ii < width and 0 <= jj < height else 0.0
+                        for jj in range(j - r, j + r + 1) for ii in range(i - r, i + r + 1))
+            out[j * width + i] = round(255 * max(0.0, fill[j * width + i] - inner))
+    return bytes(out)
+
+
+def bc4_blocks(mask, width, height):
+    """The BC4 blocks (8 bytes each, row-major) of width x height bytes; the edge pixels repeat out to a multiple of 4."""
+    out = bytearray()
+    for by in range((height + 3) // 4):
+        for bx in range((width + 3) // 4):
+            px = [mask[min(height - 1, by * 4 + j) * width + min(width - 1, bx * 4 + i)] for j in range(4) for i in range(4)]
+            hi, lo = max(px), min(px)
+            palette = [hi, lo] + [((7 - k) * hi + k * lo) // 7 for k in range(1, 7)] if hi > lo else [hi] * 8
+            bits = 0
+            for n, v in enumerate(px):
+                bits |= min(range(8), key=lambda k: abs(palette[k] - v)) << (3 * n)
+            out += bytes([hi, lo]) + bits.to_bytes(6, 'little')
+    return bytes(out)
+
+
+def bntx_shoulders(data, base, textures):
+    """Draw the DualSense's R and ZR highlights into the BC4 textures of textures (ConProR_00, ConProR_Line, ConProZR_00,
+    ConProZR_Line) of the BNTX at data[base:]; returns the names written."""
+    return bntx_blocks(data, base, textures, BC4_UNORM, 8, lambda name, w, h: bc4_blocks(shoulder_mask(name, w, h), w, h))
 
 
 # ---- the resource size table: System/Resource/ResourceSizeTable.Product.<n>.Nin_NX_NVN.rsizetable.zs, a RESTBL whose

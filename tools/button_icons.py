@@ -519,15 +519,16 @@ def rasterize(draw, size):
     return rasterize_rect(draw, size, size, HUD_MARGIN)
 
 
-def rasterize_rect(draw, width, height, margin):
-    """A width x height coverage mask (0..255, rows top down) of draw's outline, fitted into the rectangle inside margin
-    pixels on each side and centred, nonzero winding."""
+def rasterize_rect(draw, width, height, margin, fit=None):
+    """A width x height coverage mask (0..255, rows top down) of draw's outline, fitted and centred into the rectangle
+    inside margin pixels on each side (or into fit, (left, top, right, bottom) in pixels), nonzero winding."""
     rec = RecordingPen(); draw(rec)
     box = BoundsPen(None); rec.replay(box); x0, y0, x1, y1 = box.bounds
-    inner_w, inner_h = width - 2 * margin, height - 2 * margin
+    left, top, right, bottom = fit or (margin, margin, width - margin, height - margin)
+    inner_w, inner_h = right - left, bottom - top
     scale = min(inner_w / (x1 - x0), inner_h / (y1 - y0))
-    ox = margin + (inner_w - (x1 - x0) * scale) / 2 - x0 * scale
-    oy = margin + (inner_h - (y1 - y0) * scale) / 2 - y0 * scale
+    ox = left + (inner_w - (x1 - x0) * scale) / 2 - x0 * scale
+    oy = top + (inner_h - (y1 - y0) * scale) / 2 - y0 * scale
     flat = PolygonPen(); rec.replay(TransformPen(flat, (scale, 0, 0, -scale, ox, height - oy)))   # font y up -> rows down
     edges = [(a, b) for poly in flat.polygons for a, b in zip(poly, poly[1:] + poly[:1]) if a[1] != b[1]]
     nx, ny = width * SUPERSAMPLE, height * SUPERSAMPLE; cover = [0] * (width * height)
@@ -586,14 +587,49 @@ CONTROLLER_TEXTURES = ('Controller_Pro', 'Controller_Pro1')
 CONTROLLER_GLYPH = 'controller_playstation5'
 CONTROLLER_FONT = os.path.join(os.path.dirname(__file__), 'data', 'kenney_input', 'kenney_input_playstation_series.otf')
 CONTROLLER_COLORS = dict(body=(0x2E, 0x2E, 0x2E), button=(0x74, 0x74, 0x74), outline=(0x10, 0x10, 0x10))
-CONTROLLER_MARGIN, CONTROLLER_OUTLINE = 14, 3
+CONTROLLER_OUTLINE = 3
+# The Pro Controller fills x 75..505, y 20..325 of its 580 x 340 picture, and the guide's highlights (circles, lines)
+# sit on its buttons: the left stick top left, the d-pad under it, the right stick lower right, the face buttons top right,
+# Minus and Plus either side of the top. The DualSense is fitted to the same box (inside the outline) and its d-pad and
+# left stick, which it has the other way round, trade places, so each highlight lands on the button it names.
+CONTROLLER_DPAD_SCALE, CONTROLLER_DPAD_RISE, CONTROLLER_DPAD_SHIFT = 0.85, 40, -12   # the rise and shift in glyph units
+CONTROLLER_BOX = (78 / 580, 23 / 340, 502 / 580, 322 / 340)
 ASTC_4X4_SRGB = 0x2D06
+
+
+def controller_draw(pen):
+    """The controller_playstation5 outline with its d-pad (four 82-unit arrows) and left stick (a 123-unit circle left of
+    the middle) swapped, so the stick is where a Pro Controller has it. Made for the glyph of tools/data/kenney_input."""
+    contours, current = [], []
+    glyph = TTFont(CONTROLLER_FONT).getGlyphSet()[CONTROLLER_GLYPH]
+    recording = RecordingPen(); glyph.draw(recording)
+    for step in recording.value:
+        current.append(step)
+        if step[0] in ('closePath', 'endPath'):
+            contours.append(current); current = []
+    boxes = []
+    for contour in contours:
+        bounds, rec = BoundsPen(None), RecordingPen(); rec.value = contour; rec.replay(bounds)
+        x0, y0, x1, y1 = bounds.bounds
+        boxes.append(((x0 + x1) / 2, (y0 + y1) / 2, round(x1 - x0)))
+    dpad = [i for i, b in enumerate(boxes) if b[2] == 82]
+    stick = [i for i, b in enumerate(boxes) if b[2] == 123 and b[0] < 512]
+    assert len(dpad) == 4 and len(stick) == 1, boxes
+    cx = sum(boxes[i][0] for i in dpad) / 4; cy = (min(boxes[i][1] for i in dpad) + max(boxes[i][1] for i in dpad)) / 2
+    sx, sy = boxes[stick[0]][:2]
+    for i, contour in enumerate(contours):
+        # The body's lower edge is higher than the Pro's, so the d-pad, in the stick's place, is a little smaller, higher and to the left (clear of the touchpad's corner).
+        matrix = ((CONTROLLER_DPAD_SCALE, 0, 0, CONTROLLER_DPAD_SCALE, sx + CONTROLLER_DPAD_SHIFT - CONTROLLER_DPAD_SCALE * cx,
+                   sy + CONTROLLER_DPAD_RISE - CONTROLLER_DPAD_SCALE * cy) if i in dpad
+                  else (1, 0, 0, 1, cx - sx, cy - sy) if i in stick else (1, 0, 0, 1, 0, 0))
+        rec = RecordingPen(); rec.value = contour
+        rec.replay(TransformPen(pen, matrix))
 
 
 def controller_rgba(width, height):
     """width x height RGBA bytes of the DualSense picture (straight alpha, sRGB colours)."""
-    glyphs = TTFont(CONTROLLER_FONT).getGlyphSet()
-    cover = rasterize_rect(glyphs[CONTROLLER_GLYPH].draw, width, height, CONTROLLER_MARGIN + CONTROLLER_OUTLINE)
+    fit = (CONTROLLER_BOX[0] * width, CONTROLLER_BOX[1] * height, CONTROLLER_BOX[2] * width, CONTROLLER_BOX[3] * height)
+    cover = rasterize_rect(controller_draw, width, height, 0, fit)
     # What the glyph does not cover and the picture's border cannot reach is a hole inside the body: a button.
     outside, queue = bytearray(width * height), []
     for x in range(width):

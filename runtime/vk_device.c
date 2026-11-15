@@ -8,6 +8,7 @@
 
 #include "cfg.h"
 #include "host.h"
+#include "memx.h"
 #include "vk.h"
 #include "platform/platform.h"
 #include "vk_dlaa.h"
@@ -400,6 +401,9 @@ static int create_device(void) {
     else if (!h->textureCompressionBC) miss = "textureCompressionBC";
     if (miss) { rt_log("vk: required feature missing on %s: %s", g_vk.props.deviceName, miss); free(c); return 0; }
     if (!c->fault.deviceFault) g_vk.has_device_fault = 0;   // vkGetDeviceFaultInfoEXT needs the feature, not just the extension
+    // Vulkan 1.3 requires the feature, and the chain goes to vkCreateDevice as the driver filled it, so it is enabled
+    // wherever reported; vk_pipeline.c spirv_demote emits OpDemoteToHelperInvocation only when it is.
+    vk_caps.demote = c->f13.shaderDemoteToHelperInvocation;
     rt_log("vk: GPU address map for device faults: %s",
            has_abr && c->abr.reportAddressBinding ? "on (VK_EXT_device_address_binding_report; TOTK_ADDR_REPORT=0 turns it off)"
            : !ab_want ? "off (TOTK_ADDR_REPORT=0 or no VK_EXT_debug_utils)"
@@ -497,6 +501,7 @@ long vk_validation_errors_total(void) { return g_errors_total + (g_ready ? g_vk.
 
 int vk_init(void) {
     plat_mutex_lock(&g_lock);
+    vk_memx_init();
     if (!g_ready) {
         memset(&g_vk, 0, sizeof g_vk);
         if (create_instance() && pick_device() && create_device())

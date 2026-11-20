@@ -269,7 +269,62 @@ static void world_clock(double dt, double step) {
     atomic_store_explicit(&world_us, w + (int64_t)(step * 1e6 + 0.5), memory_order_relaxed);
 }
 
+// TEMP: TOTK_GRASS_LOD (1 to 16, live): scales the grass scene's per-cell density LOD (how far cells keep their full
+// tuft count, and where they stop), patch set grasslod reading page +200.
+static void grass_lod_live(void) {
+    static unsigned seen;
+    static int read, set = -2;
+    unsigned v = cfg_version();
+    if (read && v == seen) return;
+    read = 1, seen = v;
+    if (set == -2) set = rt_patch_set("grasslod");
+    if (set < 0) return;
+    float k = (float)cfg_double("TOTK_GRASS_LOD");
+    if (!(k >= 1.0f)) k = 1.0f;
+    if (k > 16.0f) k = 16.0f;
+    memcpy((uint8_t *)rt_patch_page() + 200, &k, sizeof k);
+    rt_patch_switch(set, k != 1.0f);
+    rt_log("grass: LOD scale %g", (double)k);
+    // TOTK_GRASS_FLOOR (metres, 0 to 200, live): cells closer than this keep their full density (set grassfloor, page +204)
+    int fs = rt_patch_set("grassfloor");
+    if (fs >= 0) {
+        const char *fe = cfg_get("TOTK_GRASS_FLOOR");   // unset: 50 m
+        float fl = fe && *fe ? (float)cfg_double("TOTK_GRASS_FLOOR") : 50.0f;
+        if (!(fl >= 0.0f)) fl = 0.0f;
+        if (fl > 200.0f) fl = 200.0f;
+        memcpy((uint8_t *)rt_patch_page() + 204, &fl, sizeof fl);
+        rt_patch_switch(fs, fl > 0.0f);
+        rt_log("grass: floor %g m", (double)fl);
+    }
+}
+
+// TOTK_GRASS_GRID (cells per side, 32 to 128, restart): the size of the near grass grids, which game::grass init
+// builds once (patch set grassgrid; its comment in recomp/patches-v143.txt lists the page words filled here).
+void grass_grid_init(void) {
+    int set = rt_patch_set("grassgrid");
+    if (set < 0 || !rt_patch_page()) return;
+    const char *e = cfg_get("TOTK_GRASS_GRID");
+    uint64_t n = e && *e ? (uint64_t)cfg_double("TOTK_GRASS_GRID") : 32;
+    if (n < 32) n = 32;
+    if (n > 128) n = 128;   // 144 and more: the grids are built but no near grass is drawn at all
+    uint64_t w[6] = {n << 32 | n, n * n * 20, n * n * 64, n * n * 112, n * n, n};
+    memcpy((uint8_t *)rt_patch_page() + 256, w, sizeof w);
+    // the moved cell queues (patch set grassgrid): the three blocks of each of the three layers, N*N entries each
+    if (n != 32) {
+        uint64_t *tab = (uint64_t *)((uint8_t *)rt_patch_page() + 400);
+        for (int layer = 0; layer < 3; layer++)
+            for (int q = 0; q < 3; q++) {
+                void *b = calloc(1, 0x10 + 4 * n * n);
+                if (!b) rt_fatal("grass: cannot allocate the cell queues");
+                tab[layer * 4 + q] = (uint64_t)(uintptr_t)b;
+            }
+    }
+    rt_patch_switch(set, n != 32);
+    rt_log("grass: grid %llu x %llu cells", (unsigned long long)n, (unsigned long long)n);
+}
+
 void frame_step_present(uint64_t display_ns, int interval) {
+    grass_lod_live();
     frame_limit_live();
     double step = 0, dt = last_ns ? (double)(display_ns - last_ns) * 1e-9 : 0;
     if (step_word && last_ns) {
